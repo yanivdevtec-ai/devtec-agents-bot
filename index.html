@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<!-- Devtec agents bot screen. The bot logic (catalog, access code, search) lives in n8n workflow "דבטק – בוט קבצים לסוכנים" -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="דבטק">
+<meta name="application-name" content="דבטק">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="theme-color" content="#000000">
+<title>דבטק – קבצים לסוכנים</title>
+<style>
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:#0d0d0d;color:#f2f2f2;font-family:Heebo,Assistant,Arial,sans-serif}
+#app{display:flex;flex-direction:column;height:100%;max-width:720px;margin:0 auto}
+header{background:#000;border-bottom:3px solid #40af49;padding:10px 12px;text-align:center}
+.logo{display:block;margin:0 auto 6px;width:190px;height:38px;border-radius:8px;background:#fff url("https://devtec.co.il/wp-content/uploads/2016/06/logo-%D7%94%D7%98%D7%95%D7%91.png") center/178px auto no-repeat}
+header h1{margin:0;font-size:23px;color:#fff}
+header p{margin:2px 0 0;font-size:15px;color:#9be3a0}
+#msgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+.m{max-width:88%;padding:10px 12px;border-radius:14px;line-height:1.55;font-size:18px;word-wrap:break-word;overflow-wrap:anywhere}
+.bot{align-self:flex-start;background:#1f1f1f;border:1px solid #2c2c2c}
+.me{align-self:flex-end;background:#40af49;color:#fff}
+.m a{color:#5ed266;font-weight:600}
+.m strong{color:#fff}
+.m img{max-width:100px;border-radius:6px;vertical-align:middle;margin-left:6px}
+.inl{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+#bar{display:none;padding:8px 8px 0;background:#000;border-top:1px solid #222}
+.row{display:flex;gap:6px;overflow-x:auto;padding-bottom:8px;-webkit-overflow-scrolling:touch}
+.chip{flex:0 0 auto;border:1px solid #40af49;background:#161616;color:#fff;border-radius:18px;padding:10px 14px;font-size:16px;font-family:inherit;cursor:pointer;white-space:nowrap}
+.chip.on{background:#40af49}
+.chip.yes{background:#40af49}
+footer{display:flex;gap:8px;padding:8px;background:#000}
+#in{flex:1;background:#161616;color:#fff;border:1px solid #40af49;border-radius:20px;padding:12px 16px;font-size:18px;font-family:inherit;outline:none}
+#in::placeholder{color:#8a8a8a}
+#send{background:#40af49;color:#fff;border:none;border-radius:20px;padding:0 18px;font-size:18px;font-family:inherit;cursor:pointer}
+.typing{opacity:.7;font-style:italic}
+.lock{display:block;margin-top:12px;padding:12px;border:2px solid #40af49;border-radius:12px;background:#0f2a12;color:#fff;font-weight:800;font-size:21px;text-align:center}
+#in.need{border-width:3px;box-shadow:0 0 0 3px rgba(64,175,73,.35)}
+header{padding-top:calc(10px + env(safe-area-inset-top))}
+footer{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
+</style>
+</head>
+<body>
+<div id="app">
+<header><span class="logo"></span><h1>דבטק – קבצים לסוכנים</h1><p>מפרטים, גיליונות בטיחות, קטלוגים וסרטונים</p></header>
+<div id="msgs"></div>
+<div id="bar">
+<div class="row" id="types">
+<button class="chip" data-v="1">📄 מפרט טכני</button>
+<button class="chip" data-v="b">📚 ברושורים וקטלוגים</button>
+<button class="chip" data-v="v">🎬 סרטונים</button>
+<button class="chip" data-v="p">🖼️ תמונות</button>
+<button class="chip" data-v="4">⚠️ גיליון בטיחות</button>
+<button class="chip" data-v="0">🏠 כל הסוגים</button>
+</div>
+<div class="row" id="forms">
+<button class="chip" data-v="#f1">📝 טופס פתיחת לקוח</button>
+<button class="chip" data-v="#f2">🏦 אישור ניהול חשבון</button>
+<button class="chip" data-v="#f3">📒 אישור ניהול ספרים</button>
+</div>
+</div>
+<footer><input id="in" placeholder="מה לשלוח לך?" autocomplete="off"><button id="send">שלח</button></footer>
+</div>
+<script>
+(function(){
+var API = 'https://yanivsofir.app.n8n.cloud/webhook/devtec-agents-msg';
+var DAYS = 5;
+var mem = {};
+function get(k){ try { return localStorage.getItem(k); } catch(e){ return mem[k] || null; } }
+function set(k,v){ try { localStorage.setItem(k,v); } catch(e){ mem[k]=v; } }
+function getCookie(n){ try { var m = document.cookie.match(new RegExp('(?:^|; )' + n + '=([^;]*)')); return m ? decodeURIComponent(m[1]) : null; } catch(e){ return null; } }
+function setCookie(n,v,days){ try { document.cookie = n + '=' + encodeURIComponent(v) + '; max-age=' + Math.round(days*86400) + '; path=/; SameSite=Lax; Secure'; } catch(e){} }
+function urlTok(){ try { return new URLSearchParams(location.search).get('t'); } catch(e){ return null; } }
+function setUrlTok(t){ try { var u = new URL(location.href); if (t) u.searchParams.set('t', t); else u.searchParams.delete('t'); history.replaceState(null, '', u.toString()); } catch(e){} }
+var tok = urlTok() || get('dv_tok') || getCookie('dv_tok') || '';
+function saveTok(t){ tok = t; set('dv_tok', t); setCookie('dv_tok', t, DAYS); setUrlTok(t); }
+function clearTok(){ tok = ''; set('dv_tok', ''); setCookie('dv_tok', '', 0); setUrlTok(''); }
+if (tok) saveTok(tok);
+var sid = get('dv_sid') || getCookie('dv_sid');
+if (!sid) sid = 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2,10);
+set('dv_sid', sid); setCookie('dv_sid', sid, DAYS);
+var authed = !!tok || get('dv_ok') === '1';
+var msgs = document.getElementById('msgs'), inp = document.getElementById('in'), bar = document.getElementById('bar');
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function md(s){
+  var h = esc(s);
+  h = h.replace(/!\[([^\]]*)\]\((https?:[^)\s]+)\)/g, '<img src="$2" alt="$1">');
+  h = h.replace(/\[([^\]]+)\]\((https?:[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  h = h.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  return h.replace(/\n/g, '<br>');
+}
+function add(cls, html){ var d = document.createElement('div'); d.className = 'm ' + cls; d.innerHTML = html; msgs.appendChild(d); msgs.scrollTop = msgs.scrollHeight; return d; }
+function showBar(){ bar.style.display = authed ? 'block' : 'none'; inp.placeholder = authed ? 'מה לשלוח לך?' : '🔒 הקלידו כאן קוד גישה'; inp.classList.toggle('need', !authed); }
+function mark(v){ var cs = document.querySelectorAll('#types .chip'); for (var i=0;i<cs.length;i++) cs[i].classList.toggle('on', cs[i].getAttribute('data-v') === v && v !== '0'); }
+function tidy(s){
+  var k = s.indexOf('רוצים רק סוג אחד?');
+  if (k >= 0) s = s.slice(0, k) + 'רוצים רק סוג אחד? לחצו על כפתור למטה 👇';
+  s = s.replace('(לחזרה לתפריט שלחו 0)', '(לכל הסוגים: 🏠 בכפתורים למטה)');
+  s = s.replace('לכל הסוגים או לתפריט שלחו 0', 'לכל הסוגים: 🏠 בכפתורים למטה');
+  s = s.replace(' כתבו "כן"', '');
+  return s;
+}
+var busy = false;
+function send(text, label){
+  text = String(text || '').trim(); if (!text || busy) return;
+  busy = true; add('me', esc(label || text)); inp.value = '';
+  var t = add('bot typing', 'מחפש…');
+  fetch(API, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ sessionId: sid, chatInput: text, token: tok }) })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (Array.isArray(j)) j = j[0] || {};
+      var out = tidy(String(j.output || j.text || 'לא התקבלה תשובה, נסו שוב.'));
+      if (j.token) saveTok(String(j.token));
+      t.className = 'm bot'; t.innerHTML = (!authed && /קוד/.test(out) && !/קוד נכון/.test(out)) ? '<span class="lock">' + esc(out) + '</span>' : md(out);
+      if (/קוד נכון/.test(out)) { authed = true; set('dv_ok','1'); showBar(); }
+      if (/קוד גישה/.test(out) && !/קוד נכון/.test(out)) { authed = false; set('dv_ok','0'); clearTok(); showBar(); }
+      if (/לשלוח גם\?/.test(out)) {
+        var w = document.createElement('div'); w.className = 'inl';
+        w.innerHTML = '<button class="chip yes">✅ כן, שלח</button><button class="chip">לא תודה</button>';
+        w.children[0].onclick = function(){ w.remove(); send('כן', '✅ כן, שלח'); };
+        w.children[1].onclick = function(){ w.remove(); send('לא תודה'); };
+        t.appendChild(w);
+      }
+      msgs.scrollTop = msgs.scrollHeight;
+    })
+    .catch(function(){ t.className = 'm bot'; t.innerHTML = '⚠️ אין חיבור כרגע. נסו שוב בעוד רגע.'; })
+    .then(function(){ busy = false; });
+}
+var cs = document.querySelectorAll('#types .chip');
+for (var i=0;i<cs.length;i++) cs[i].onclick = function(){ var v = this.getAttribute('data-v'); mark(v); send(v, this.textContent); };
+var fs = document.querySelectorAll('#forms .chip');
+for (var i=0;i<fs.length;i++) fs[i].onclick = function(){ send(this.getAttribute('data-v'), this.textContent); };
+document.getElementById('send').onclick = function(){ send(inp.value); };
+inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); send(inp.value); } });
+add('bot', md('שלום! 👋 כאן מקבלים כל חומר על מוצרי דבטק:\n📄 מפרטים · ⚠️ בטיחות · 📘 ברושורים · 📚 קטלוגים · 🎬 סרטונים · 🖼️ תמונות מפרויקטים · 🧪 דוחות בדיקה\n📝 וגם טפסים: טופס פתיחת לקוח ופרטי בנק\nכותבים שם מוצר או צורך, ובכפתורים למטה בוחרים סוג קובץ.') + (authed ? '' : '<span class="lock">🔒 כדי להתחיל – הקלידו קוד גישה</span>'));
+showBar();
+})();
+</script>
+<script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){});}</script>
+</body>
+</html>
