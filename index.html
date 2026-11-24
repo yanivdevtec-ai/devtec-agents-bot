@@ -51,11 +51,38 @@ footer{display:flex;gap:8px;padding:8px;background:#000}
 #in.need{border-width:3px;box-shadow:0 0 0 3px rgba(64,175,73,.35)}
 header{padding-top:calc(10px + env(safe-area-inset-top))}
 footer{padding-bottom:calc(8px + env(safe-area-inset-bottom))}
+header{position:relative}
+#switch{display:none;position:absolute;left:8px;bottom:6px;background:#161616;color:#9be3a0;border:1px solid #40af49;border-radius:14px;padding:5px 10px;font-size:13px;font-family:inherit;cursor:pointer}
+.scr{display:none;flex:1;overflow-y:auto;padding:18px 14px}
+.scr h2{margin:4px 0 14px;font-size:21px;text-align:center;color:#fff}
+.big{display:block;width:100%;margin:0 0 12px;padding:18px 14px;border:2px solid #40af49;border-radius:14px;background:#161616;color:#fff;font-size:20px;font-weight:700;font-family:inherit;text-align:right;cursor:pointer;text-decoration:none}
+.big small{display:block;margin-top:4px;font-size:14px;font-weight:400;color:#9be3a0}
+.big.go{background:#40af49}
+.big.go small{color:#eaffea}
+#codeIn{display:block;width:100%;margin:6px 0 12px;background:#161616;color:#fff;border:3px solid #40af49;border-radius:14px;padding:14px;font-size:24px;text-align:center;letter-spacing:6px;font-family:inherit;outline:none}
+.note{color:#bdbdbd;font-size:15px;text-align:center;margin:8px 0}
+.err{color:#ff8a80;font-weight:700;text-align:center;min-height:22px}
 </style>
 </head>
 <body>
 <div id="app">
-<header><span class="logo"></span><h1>דבטק – קבצים לסוכנים</h1><p>מפרטים, גיליונות בטיחות, קטלוגים וסרטונים</p></header>
+<header><button id="switch">⇄ כניסה אחרת</button><span class="logo"></span><h1 id="ttl">דבטק – קבצים לסוכנים</h1><p id="sub">מפרטים, גיליונות בטיחות, קטלוגים וסרטונים</p></header>
+<div class="scr" id="cats">
+<h2>מי נכנס?</h2>
+<button class="big" data-c="agents">🧑‍💼 סוכנים<small>מפרטים, תמונות, סרטונים וטפסים</small></button>
+<button class="big" data-c="warehouse">📦 מחסן ולוגיסטיקה<small>טופס החזרת סחורה</small></button>
+<button class="big" data-c="collect">💰 גבייה והנהלת חשבונות<small>דיווחי גבייה</small></button>
+<button class="big" data-c="manage">⭐ ניהול<small>כל האפשרויות</small></button>
+</div>
+<div class="scr" id="login">
+<h2 id="loginTtl">כניסה</h2>
+<p class="note">🔒 הקלידו את קוד הכניסה שלכם</p>
+<input id="codeIn" type="tel" inputmode="numeric" autocomplete="off" maxlength="8">
+<div class="err" id="loginErr"></div>
+<button class="big go" id="loginGo" style="text-align:center">כניסה</button>
+<button class="big" id="loginBack" style="text-align:center">חזרה</button>
+</div>
+<div class="scr" id="panel"></div>
 <div id="msgs"></div>
 <div id="bar">
 <div class="row" id="types">
@@ -145,8 +172,88 @@ var fs = document.querySelectorAll('#forms .chip');
 for (var i=0;i<fs.length;i++) fs[i].onclick = function(){ send(this.getAttribute('data-v'), this.textContent); };
 document.getElementById('send').onclick = function(){ send(inp.value); };
 inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); send(inp.value); } });
-add('bot', md('שלום! 👋 כאן מקבלים כל חומר על מוצרי דבטק:\n📄 מפרטים · ⚠️ בטיחות · 📘 ברושורים · 📚 קטלוגים · 🎬 סרטונים · 🖼️ תמונות מפרויקטים · 🧪 דוחות בדיקה\n📝 וגם טפסים: טופס פתיחת לקוח ופרטי בנק\nכותבים שם מוצר או צורך, ובכפתורים למטה בוחרים סוג קובץ.') + (authed ? '' : '<span class="lock">🔒 כדי להתחיל – הקלידו קוד גישה</span>'));
-showBar();
+// ===== Category entry (same link): agents chat / warehouse & logistics / collection / management =====
+// Codes for warehouse & management are checked in n8n workflow "דבטק – אפליקציה: כניסה לפי קטגוריה" (webhook devtec-app-login)
+var LOGIN = 'https://yanivsofir.app.n8n.cloud/webhook/devtec-app-login';
+var RETURNS_FORM = 'https://yanivsofir.app.n8n.cloud/form/devtech-returns-form';
+var COLLECT = 'https://yanivsofir.app.n8n.cloud/webhook/devtec-collect';
+var $ = function(id){ return document.getElementById(id); };
+var footer = document.querySelector('footer');
+var greeted = false;
+function catSaved(){ var c = get('dv_cat') || getCookie('dv_cat'); var exp = Number(get('dv_cat_exp') || getCookie('dv_cat_exp') || 0); return (c && exp > Date.now()) ? c : ''; }
+function saveCat(c, name){ var exp = String(Date.now() + DAYS*86400000); set('dv_cat', c); set('dv_cat_exp', exp); set('dv_name', name || ''); setCookie('dv_cat', c, DAYS); setCookie('dv_cat_exp', exp, DAYS); }
+function clearCat(){ set('dv_cat', ''); set('dv_cat_exp', '0'); setCookie('dv_cat', '', 0); setCookie('dv_cat_exp', '', 0); }
+function head(t, s){ $('ttl').textContent = t; $('sub').textContent = s; }
+function screen(which){
+  ['cats','login','panel'].forEach(function(id){ $(id).style.display = (id === which) ? 'block' : 'none'; });
+  var chat = which === 'chat';
+  msgs.style.display = chat ? 'flex' : 'none';
+  footer.style.display = chat ? 'flex' : 'none';
+  if (chat) showBar(); else bar.style.display = 'none';
+  $('switch').style.display = (which === 'cats') ? 'none' : 'block';
+}
+function openChat(){
+  head('דבטק – קבצים לסוכנים', 'מפרטים, גיליונות בטיחות, קטלוגים וסרטונים');
+  screen('chat');
+  if (!greeted) {
+    greeted = true;
+    add('bot', md('שלום! 👋 כאן מקבלים כל חומר על מוצרי דבטק:\n📄 מפרטים · ⚠️ בטיחות · 📘 ברושורים · 📚 קטלוגים · 🎬 סרטונים · 🖼️ תמונות מפרויקטים · 🧪 דוחות בדיקה\n📝 וגם טפסים: טופס פתיחת לקוח ופרטי בנק\nכותבים שם מוצר או צורך, ובכפתורים למטה בוחרים סוג קובץ.') + (authed ? '' : '<span class="lock">🔒 כדי להתחיל – הקלידו קוד גישה</span>'));
+  }
+}
+function openCats(){ head('דבטק – אפליקציה', 'בחרו איך להיכנס'); screen('cats'); }
+var pendingCat = '';
+function openLogin(c){
+  pendingCat = c; $('codeIn').value = ''; $('loginErr').textContent = '';
+  $('loginTtl').textContent = c === 'manage' ? '⭐ כניסת ניהול' : '📦 כניסת מחסן ולוגיסטיקה';
+  head('דבטק – אפליקציה', c === 'manage' ? 'ניהול' : 'מחסן ולוגיסטיקה'); screen('login');
+  setTimeout(function(){ try { $('codeIn').focus(); } catch(e){} }, 50);
+}
+function btnLink(href, title, sub, go){ return '<a class="big' + (go ? ' go' : '') + '" href="' + href + '">' + title + '<small>' + sub + '</small></a>'; }
+function openPanel(c){
+  var name = get('dv_name') || '';
+  var h = '<h2>שלום' + (name && name !== 'ניהול' ? ' ' + esc(name) : '') + ' 👋</h2>';
+  h += btnLink(RETURNS_FORM, '📦 טופס החזרת סחורה', 'בחירת חברה, קוד אישי ופרטי ההחזרה', true);
+  if (c === 'manage') {
+    h += btnLink(COLLECT, '💰 דיווחי גבייה', 'דיווח על קשיי תשלום של לקוח', false);
+    h += '<button class="big" id="toChat">🧑‍💼 קבצים לסוכנים<small>מפרטים, תמונות, סרטונים וטפסים</small></button>';
+  }
+  h += '<p class="note">הכניסה נשמרת במכשיר ל-5 ימים</p>';
+  $('panel').innerHTML = h;
+  var tc = $('toChat'); if (tc) tc.onclick = openChat;
+  head('דבטק – אפליקציה', c === 'manage' ? '⭐ ניהול' : '📦 מחסן ולוגיסטיקה'); screen('panel');
+}
+var cbs = document.querySelectorAll('#cats .big');
+for (var i=0;i<cbs.length;i++) cbs[i].onclick = function(){
+  var c = this.getAttribute('data-c');
+  if (c === 'agents') { clearCat(); openChat(); }
+  else if (c === 'collect') { location.href = COLLECT; }
+  else if (catSaved() === c) openPanel(c);
+  else openLogin(c);
+};
+$('loginBack').onclick = openCats;
+$('switch').onclick = function(){ clearCat(); openCats(); };
+var loginBusy = false;
+function doLogin(){
+  var code = $('codeIn').value.replace(/\s/g, '');
+  if (!code || loginBusy) return;
+  loginBusy = true; $('loginErr').textContent = 'בודק…';
+  fetch(LOGIN, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ category: pendingCat, code: code, sid: sid }) })
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (Array.isArray(j)) j = j[0] || {};
+      if (j.ok) { saveCat(pendingCat, j.name); openPanel(pendingCat); }
+      else { $('loginErr').textContent = j.msg || '❌ קוד שגוי, נסו שוב.'; $('codeIn').value = ''; }
+    })
+    .catch(function(){ $('loginErr').textContent = '⚠️ אין חיבור כרגע. נסו שוב בעוד רגע.'; })
+    .then(function(){ loginBusy = false; });
+}
+$('loginGo').onclick = doLogin;
+$('codeIn').addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventDefault(); doLogin(); } });
+// start: saved warehouse/management entry → its screen; agents who already entered → chat as before; otherwise → choose category
+var start = catSaved();
+if (start === 'warehouse' || start === 'manage') openPanel(start);
+else if (authed) openChat();
+else openCats();
 })();
 </script>
 <script>if('serviceWorker' in navigator){navigator.serviceWorker.register('sw.js').catch(function(){});}</script>
