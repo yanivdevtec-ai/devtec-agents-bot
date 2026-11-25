@@ -176,13 +176,14 @@ inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventD
 // Codes for warehouse & management are checked in n8n workflow "דבטק – אפליקציה: כניסה לפי קטגוריה" (webhook devtec-app-login)
 var LOGIN = 'https://yanivsofir.app.n8n.cloud/webhook/devtec-app-login';
 var RETURNS_FORM = 'https://yanivsofir.app.n8n.cloud/form/devtech-returns-form';
+var RETURNS_APP = 'https://yanivsofir.app.n8n.cloud/form/devtech-returns-app'; // opens with the login ticket – no second code
 var COLLECT = 'https://yanivsofir.app.n8n.cloud/webhook/devtec-collect';
 var $ = function(id){ return document.getElementById(id); };
 var footer = document.querySelector('footer');
 var greeted = false;
 function catSaved(){ var c = get('dv_cat') || getCookie('dv_cat'); var exp = Number(get('dv_cat_exp') || getCookie('dv_cat_exp') || 0); return (c && exp > Date.now()) ? c : ''; }
-function saveCat(c, name){ var exp = String(Date.now() + DAYS*86400000); set('dv_cat', c); set('dv_cat_exp', exp); set('dv_name', name || ''); setCookie('dv_cat', c, DAYS); setCookie('dv_cat_exp', exp, DAYS); }
-function clearCat(){ set('dv_cat', ''); set('dv_cat_exp', '0'); setCookie('dv_cat', '', 0); setCookie('dv_cat_exp', '', 0); }
+function saveCat(c, name, ticket){ if (ticket) set('dv_ticket', ticket); var exp = String(Date.now() + DAYS*86400000); set('dv_cat', c); set('dv_cat_exp', exp); set('dv_name', name || ''); setCookie('dv_cat', c, DAYS); setCookie('dv_cat_exp', exp, DAYS); }
+function clearCat(){ set('dv_ticket', ''); set('dv_cat', ''); set('dv_cat_exp', '0'); setCookie('dv_cat', '', 0); setCookie('dv_cat_exp', '', 0); }
 function head(t, s){ $('ttl').textContent = t; $('sub').textContent = s; }
 function screen(which){
   ['cats','login','panel'].forEach(function(id){ $(id).style.display = (id === which) ? 'block' : 'none'; });
@@ -212,7 +213,8 @@ function btnLink(href, title, sub, go){ return '<a class="big' + (go ? ' go' : '
 function openPanel(c){
   var name = get('dv_name') || '';
   var h = '<h2>שלום' + (name && name !== 'ניהול' ? ' ' + esc(name) : '') + ' 👋</h2>';
-  h += btnLink(RETURNS_FORM, '📦 טופס החזרת סחורה', 'בחירת חברה, קוד אישי ופרטי ההחזרה', true);
+  var tk = get('dv_ticket') || '';
+  h += btnLink(tk ? RETURNS_APP + '?ticket=' + encodeURIComponent(tk) : RETURNS_FORM, '📦 טופס החזרת סחורה', tk ? 'בחירת חברה ופרטי ההחזרה – בלי קוד נוסף' : 'בחירת חברה, קוד אישי ופרטי ההחזרה', true);
   if (c === 'manage') {
     h += btnLink(COLLECT, '💰 דיווחי גבייה', 'דיווח על קשיי תשלום של לקוח', false);
     h += '<button class="big" id="toChat">🧑‍💼 קבצים לסוכנים<small>מפרטים, תמונות, סרטונים וטפסים</small></button>';
@@ -241,7 +243,7 @@ function doLogin(){
     .then(function(r){ return r.json(); })
     .then(function(j){
       if (Array.isArray(j)) j = j[0] || {};
-      if (j.ok) { saveCat(pendingCat, j.name); openPanel(pendingCat); }
+      if (j.ok) { saveCat(pendingCat, j.name, j.ticket); openPanel(pendingCat); }
       else { $('loginErr').textContent = j.msg || '❌ קוד שגוי, נסו שוב.'; $('codeIn').value = ''; }
     })
     .catch(function(){ $('loginErr').textContent = '⚠️ אין חיבור כרגע. נסו שוב בעוד רגע.'; })
