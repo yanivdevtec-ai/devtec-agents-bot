@@ -62,6 +62,12 @@ header{position:relative}
 #codeIn{display:block;width:100%;margin:6px 0 12px;background:#161616;color:#fff;border:3px solid #40af49;border-radius:14px;padding:14px;font-size:24px;text-align:center;letter-spacing:6px;font-family:inherit;outline:none}
 .note{color:#bdbdbd;font-size:15px;text-align:center;margin:8px 0}
 .err{color:#ff8a80;font-weight:700;text-align:center;min-height:22px}
+.drafts{margin:0 0 16px;padding:14px;border:3px solid #e53935;border-radius:14px;background:#1a0d0d}
+.drafts h3{margin:0 0 10px;font-size:19px;color:#fff}
+.draft{padding:10px 0;border-top:1px solid #3a2222}
+.draft b{display:block;font-size:18px;color:#fff}
+.draft span{display:block;font-size:14px;color:#bdbdbd;margin:2px 0 8px}
+.draft a{display:block;padding:12px;border-radius:12px;background:#40af49;color:#fff;font-size:17px;font-weight:700;text-align:center;text-decoration:none}
 </style>
 </head>
 <body>
@@ -176,6 +182,7 @@ inp.addEventListener('keydown', function(e){ if (e.key === 'Enter') { e.preventD
 // Codes for warehouse & management are checked in n8n workflow "דבטק – אפליקציה: כניסה לפי קטגוריה" (webhook devtec-app-login)
 var LOGIN = 'https://yanivsofir.app.n8n.cloud/webhook/devtec-app-login';
 var RETURNS_FORM = 'https://yanivsofir.app.n8n.cloud/form/devtech-returns-form';
+var DRAFTS = 'https://yanivsofir.app.n8n.cloud/webhook/devtec-app-drafts';
 var RETURNS_APP = 'https://yanivsofir.app.n8n.cloud/form/devtech-returns-app'; // opens with the login ticket – no second code
 var COLLECT = 'https://yanivsofir.app.n8n.cloud/webhook/devtec-collect';
 var $ = function(id){ return document.getElementById(id); };
@@ -214,6 +221,7 @@ function openPanel(c){
   var name = get('dv_name') || '';
   var h = '<h2>שלום' + (name && name !== 'ניהול' ? ' ' + esc(name) : '') + ' 👋</h2>';
   var tk = get('dv_ticket') || '';
+  h += '<div id="drafts"></div>';
   h += btnLink(tk ? RETURNS_APP + '?ticket=' + encodeURIComponent(tk) : RETURNS_FORM, '📦 טופס החזרת סחורה', tk ? 'בחירת חברה ופרטי ההחזרה – בלי קוד נוסף' : 'בחירת חברה, קוד אישי ופרטי ההחזרה', true);
   if (c === 'manage') {
     h += btnLink(COLLECT, '💰 דיווחי גבייה', 'דיווח על קשיי תשלום של לקוח', false);
@@ -223,6 +231,33 @@ function openPanel(c){
   $('panel').innerHTML = h;
   var tc = $('toChat'); if (tc) tc.onclick = openChat;
   head('דבטק – אפליקציה', c === 'manage' ? '⭐ ניהול' : '📦 מחסן ולוגיסטיקה'); screen('panel');
+  if (tk) loadDrafts(tk);
+}
+function fmtTime(v){
+  var d = new Date(v);
+  if (!v || isNaN(d.getTime()) || !/\d{4}-\d{2}-\d{2}|^\d{10,}$/.test(String(v))) return String(v || '');
+  try { return d.toLocaleString('he-IL', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }); } catch(e){ return String(v); }
+}
+function loadDrafts(tk){
+  fetch(DRAFTS + '?ticket=' + encodeURIComponent(tk))
+    .then(function(r){ return r.json(); })
+    .then(function(j){
+      if (Array.isArray(j)) j = j[0] || {};
+      var box = $('drafts'); if (!box || get('dv_ticket') !== tk) return;
+      var list = (j && j.ok !== false && Array.isArray(j.drafts)) ? j.drafts : [];
+      var n = Number(j && j.count) || 0;
+      if (n <= 0 || !list.length) { box.innerHTML = ''; return; }
+      var h = '<div class="drafts"><h3>⚠️ יש לך ' + n + ' טפסי החזרה שלא נשלחו</h3>';
+      for (var i=0;i<list.length;i++) {
+        var d = list[i] || {};
+        var info = [d.company, fmtTime(d.started)].filter(function(x){ return x; }).map(esc).join(' · ');
+        h += '<div class="draft"><b>' + esc(d.customer || 'לקוח') + '</b>' + (info ? '<span>' + info + '</span>' : '');
+        if (d.url && /^https?:\/\//i.test(d.url)) h += '<a href="' + esc(d.url) + '">להמשך הטופס</a>';
+        h += '</div>';
+      }
+      box.innerHTML = h + '</div>';
+    })
+    .catch(function(){});
 }
 var cbs = document.querySelectorAll('#cats .big');
 for (var i=0;i<cbs.length;i++) cbs[i].onclick = function(){
